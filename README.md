@@ -1,45 +1,72 @@
 # Wi-Fi Toggle Automation
 
-## Overview
-This solution disables Wi-Fi whenever a physical Ethernet link is active and re-enables Wi-Fi as soon as the Ethernet cable is disconnected. It uses only built-in macOS utilities (`networksetup`, `system_profiler`, `ifconfig`, `launchctl`) and monitors the SystemConfiguration store so it reacts immediately to interface state changes without polling.
+Automatically turns Wi-Fi off when a wired Ethernet link is active and turns Wi-Fi back on when Ethernet is inactive. Built only with macOS system tools and currently tested on macOS 26.1 (Tahoe) on this host.
 
-### Files
-- `wifi-toggle.sh` – Bash script that detects the Wi-Fi hardware dynamically, verifies that an Ethernet interface is both physical and link-active, and toggles Wi-Fi only when a state change is required. All actions are logged to `/tmp/wifi-toggle.log`.
-- `com.user.wifitoggle.plist` – LaunchDaemon configuration that runs the script at boot and on any change inside `/Library/Preferences/SystemConfiguration/`, which receives updates for every network event.
+## How It Works
+- A LaunchDaemon monitors `/Library/Preferences/SystemConfiguration/` for network changes and runs `wifi-toggle.sh`.
+- The script discovers the Wi-Fi device dynamically, lists all non-Wi-Fi interfaces, filters out virtual adapters, and checks link status with `ifconfig`.
+- Wi-Fi power is changed only when a real Ethernet link is active or inactive (idempotent). Exit codes: `0` action taken, `1` error, `2` no change needed.
 
-### Why a LaunchDaemon?
-Changing Wi-Fi power via `networksetup -setairportpower` requires administrator privileges on macOS Ventura/Sonoma. Running this as a system LaunchDaemon (`/Library/LaunchDaemons`) ensures the script has root privileges and fires before any user logs in. A LaunchAgent would not have permission to toggle the hardware power without interactive authentication, so it is unsuitable here.
+## Files
+- `wifi-toggle.sh` — Core logic with dry-run and verbose flags.
+- `com.user.wifitoggle.plist` — LaunchDaemon definition watching network state changes.
+- `install.sh` — Helper to install, reload, or uninstall the daemon.
+- `.gitignore` — Ignores common macOS and editor artifacts.
 
-## Installation
-Run the following from the project directory. Each command uses only built-in tooling.
+## Prerequisites
+- macOS Tahoe (26.1). Older versions may work but are not tested here.
+- Admin/root privileges to install and control Wi-Fi power.
+- Built-in tools only: `networksetup`, `ifconfig`, `launchctl`, `install`.
 
+## Installation (manual)
 ```bash
-# 1) Install the script with root-only write permissions.
+# Run from the repo root
+sudo install -d -m 755 /usr/local/sbin
 sudo install -m 755 wifi-toggle.sh /usr/local/sbin/wifi-toggle.sh
-
-# 2) Install the LaunchDaemon plist (owned by root:wheel, read-only).
 sudo install -m 644 com.user.wifitoggle.plist /Library/LaunchDaemons/com.user.wifitoggle.plist
-
-# 3) Tell launchd about the new daemon and start it immediately.
+sudo launchctl bootout system /Library/LaunchDaemons/com.user.wifitoggle.plist 2>/dev/null || true
 sudo launchctl bootstrap system /Library/LaunchDaemons/com.user.wifitoggle.plist
 sudo launchctl kickstart -k system/com.user.wifitoggle
 ```
 
-The daemon now monitors `/Library/Preferences/SystemConfiguration/` for changes and runs `wifi-toggle.sh` at load and whenever the network stack reports a state transition.
+## Installation (helper script)
+```bash
+sudo ./install.sh install   # install and start
+sudo ./install.sh reload    # reinstall files and restart the daemon
+sudo ./install.sh uninstall # stop and remove
+```
 
-## Verification & Logs
-- Current status is written to `/tmp/wifi-toggle.log`. Tail this file while connecting/disconnecting Ethernet to confirm behavior.
-- Launchd stdout/stderr are redirected to `/tmp/wifi-toggle.launchd.log`.
-- To check the daemon state: `sudo launchctl print system/com.user.wifitoggle`.
+## Usage & Testing
+- Manual dry run: `sudo /usr/local/sbin/wifi-toggle.sh --dry-run --verbose`
+- Verbose mode prints decisions to stdout; all runs log to `/tmp/wifi-toggle.log`.
+- Launchd stdout/stderr go to `/tmp/wifi-toggle.launchd.log`.
+- Check daemon status: `sudo launchctl print system/com.user.wifitoggle`
 
-## Uninstall
+## Uninstall (manual)
 ```bash
 sudo launchctl bootout system /Library/LaunchDaemons/com.user.wifitoggle.plist
 sudo rm /Library/LaunchDaemons/com.user.wifitoggle.plist
 sudo rm /usr/local/sbin/wifi-toggle.sh
 ```
 
-## Operational Notes
-- The script avoids false positives by using `networksetup -listallhardwareports` to list all non-Wi-Fi interfaces, excludes obvious virtual adapters (bridges, VPNs, VM NICs, etc.), and then requires `ifconfig <device>` to report `status: active` before disabling Wi-Fi.
-- Idempotency is enforced via `networksetup -getairportpower`: Wi-Fi is toggled only if its current state differs from what is required.
-- All tooling is part of macOS; no third-party binaries or network access is needed.
+## Troubleshooting
+- Nothing happens: confirm the daemon is loaded (`launchctl print`), and that `/usr/local/sbin/wifi-toggle.sh` is executable by root.
+- Wi-Fi not toggling: tail `/tmp/wifi-toggle.log` and `/tmp/wifi-toggle.launchd.log` to see decisions and errors.
+- USB Ethernet not detected: ensure the adapter appears in `networksetup -listallhardwareports` and `ifconfig <device>` shows `status: active`.
+- Still stuck: run the script manually with `--dry-run --verbose` to view decision logic without changing Wi-Fi power.
+
+## Security Notes
+- All binaries are absolute paths and PATH is restricted to system defaults.
+- No external dependencies or downloads.
+- Requires root because `networksetup -setairportpower` needs admin rights.
+
+## License
+MIT License
+
+Copyright (c) 2024
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

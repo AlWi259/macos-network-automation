@@ -1,69 +1,171 @@
 #!/bin/bash
 
 set -euo pipefail
+IFS=$'\n\t'
 
+# Version info
+VERSION="1.2.0"
+
+# Security: restrict PATH to built-in locations
 PATH="/usr/sbin:/usr/bin:/bin:/usr/local/bin:/sbin"
+export PATH
+
+# Absolute command paths
+NET_SETUP="/usr/sbin/networksetup"
+IFCONFIG="/sbin/ifconfig"
+GREP="/usr/bin/grep"
+DATE="/bin/date"
+
+# Logging
 LOG_FILE="/tmp/wifi-toggle.log"
 
-log() {
-    printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S%z')" "$*" >> "$LOG_FILE"
+# Runtime flags
+DRY_RUN=false
+VERBOSE=false
+
+# Hardware cache
+wifi_device=""
+wifi_port_name=""
+hardware_devices=()
+hardware_ports=()
+
+# Reserved for future cleanup logic
+cleanup() {
+    :
+}
+trap cleanup EXIT
+
+# Show usage help
+usage() {
+    cat <<'EOF'
+Usage: wifi-toggle.sh [--dry-run] [--verbose|-v] [--help]
+
+Automatically disables Wi-Fi when a wired Ethernet link is active and re-enables Wi-Fi when Ethernet is inactive.
+
+Options:
+  --dry-run       Show intended actions without changing Wi-Fi power
+  --verbose, -v   Print debug output to stdout in addition to the log file
+  --help, -h      Show this help text
+EOF
 }
 
-require_root() {
-    if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-        log "This script must run as root to control Wi-Fi power."
-        exit 1
+# Write to the log file
+log() {
+    printf '%s wifi-toggle: %s\n' "$("$DATE" '+%Y-%m-%d %H:%M:%S%z')" "$*" >> "$LOG_FILE"
+}
+
+# Log and optionally echo when verbose
+log_verbose() {
+    log "$@"
+    if [[ "$VERBOSE" == "true" ]]; then
+        printf '%s\n' "$*"
     fi
 }
 
-get_wifi_device() {
-    networksetup -listallhardwareports | awk '
-        /^Hardware Port: (Wi-Fi|AirPort)$/ {
-            getline
-            if ($1 == "Device:") {
-                print $2
-                exit
-            }
-        }
-    '
+# Log an error and exit
+fail() {
+    log "ERROR: $*"
+    printf 'ERROR: %s\n' "$*" >&2
+    exit 1
 }
 
-get_port_name_for_device() {
-    local device="$1"
-    networksetup -listallhardwareports | awk -v target="$device" '
-        /^Hardware Port: / {
-            port=$0
-            sub(/^Hardware Port: /, "", port)
-        }
-        /^Device: / {
-            dev=$0
-            sub(/^Device: /, "", dev)
-            if (dev == target) {
-                print port
-                exit
-            }
-        }
-    '
+# Ensure the script is running as root
+require_root() {
+    if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+        fail "Run as root to manage Wi-Fi power."
+    fi
 }
 
-list_active_ethernet_devices() {
-    # Enumerate all hardware ports and return device names excluding Wi-Fi/AirPort.
-    networksetup -listallhardwareports | awk '
-        /^Hardware Port: / {
-            port=$0
-            sub(/^Hardware Port: /, "", port)
-        }
-        /^Device: / {
-            dev=$0
-            sub(/^Device: /, "", dev)
-            if (dev != "" && port !~ /^(Wi-Fi|AirPort)$/) {
-                print dev
-            }
-            port=""
-        }
-    '
+# Parse command line arguments
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run)
+                DRY_RUN=true
+                shift
+                ;;
+            --verbose|-v)
+                VERBOSE=true
+                shift
+                ;;
+            --help|-h)
+                usage
+                exit 0
+                ;;
+            *)
+                fail "Unknown argument: $1"
+                ;;
+        esac
+    done
 }
 
+# Load hardware ports once and cache device/port pairs
+load_hardware_ports() {
+    local hw_output
+    if ! hw_output=$("$NET_SETUP" -listallhardwareports 2>/dev/null); then
+        fail "Unable to list hardware ports."
+    fi
+
+    local line="" current_port="" current_dev=""
+    while IFS= read -r line; do
+        case "$line" in
+            "Hardware Port:"*)
+                current_port=${line#Hardware Port: }
+                ;;
+            "Device:"*)
+                current_dev=${line#Device: }
+                if [[ -n "$current_port" && -n "$current_dev" ]]; then
+                    hardware_ports+=("$current_port")
+                    hardware_devices+=("$current_dev")
+                    if [[ -z "$wifi_device" && "$current_port" =~ ^(Wi-Fi|AirPort)$ ]]; then
+                        wifi_device="$current_dev"
+                        wifi_port_name="$current_port"
+                    fi
+                fi
+                current_port=""
+                current_dev=""
+                ;;
+            *)
+                ;;
+        esac
+    done <<< "$hw_output"
+}
+
+# Get port name for a given BSD device
+port_name_for_device() {
+    local target="$1" i
+    for i in "${!hardware_devices[@]}"; do
+        if [[ "${hardware_devices[$i]}" == "$target" ]]; then
+            printf '%s' "${hardware_ports[$i]}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Determine Wi-Fi power state (On/Off/Unknown)
+wifi_power_state() {
+    local output=""
+    if [[ -n "$wifi_port_name" ]]; then
+        output=$("$NET_SETUP" -getairportpower "$wifi_port_name" 2>/dev/null || true)
+    elif [[ -n "$wifi_device" ]]; then
+        output=$("$NET_SETUP" -getairportpower "$wifi_device" 2>/dev/null || true)
+    fi
+
+    if [[ -z "$output" ]]; then
+        log "Unable to read Wi-Fi power state."
+        printf 'Unknown'
+        return 0
+    fi
+
+    if printf '%s' "$output" | "$GREP" -q "On"; then
+        printf 'On'
+    else
+        printf 'Off'
+    fi
+}
+
+# Detect virtual or non-physical ports
 is_virtual_port() {
     local name="$1"
     case "$name" in
@@ -76,102 +178,83 @@ is_virtual_port() {
     esac
 }
 
-wifi_power_state() {
-    local device="$1"
-    local port="$2"
-    local output=""
-    if [[ -n "$device" ]] && output=$(networksetup -getairportpower "$device" 2>/dev/null); then
-        :
-    elif [[ -n "$port" ]] && output=$(networksetup -getairportpower "$port" 2>/dev/null); then
-        :
-    else
-        log "Unable to read Wi-Fi power state for ${device:-unknown}."
-        echo "Unknown"
-        return
-    fi
-
-    if printf '%s' "$output" | grep -q "On"; then
-        echo "On"
-    else
-        echo "Off"
-    fi
-}
-
+# Return success if any physical Ethernet interface is active
 has_active_physical_ethernet() {
-    while IFS= read -r dev; do
-        [[ -z "$dev" ]] && continue
-        local port_name
-        port_name="$(get_port_name_for_device "$dev")"
+    local dev="" port_name=""
+    for dev in "${hardware_devices[@]}"; do
+        port_name="$(port_name_for_device "$dev" || true)"
         [[ -z "$port_name" ]] && continue
+        if [[ "$port_name" =~ ^(Wi-Fi|AirPort)$ ]]; then
+            continue
+        fi
         if is_virtual_port "$port_name"; then
             continue
         fi
-        if ifconfig "$dev" 2>/dev/null | grep -q "status: active"; then
-            log "Detected active Ethernet link on ${port_name} (${dev})."
+        if "$IFCONFIG" "$dev" 2>/dev/null | "$GREP" -q "status: active"; then
+            log_verbose "Active Ethernet detected on ${port_name} (${dev})."
             return 0
         fi
-    done < <(list_active_ethernet_devices)
+    done
     return 1
 }
 
-toggle_wifi() {
+# Set Wi-Fi power to on/off respecting dry-run
+set_wifi_power() {
     local desired="$1"
-    local device="$2"
-    local port="$3"
-    case "$desired" in
-        on|off)
-            if networksetup -setairportpower "$device" "$desired" 2>/dev/null; then
-                log "Set Wi-Fi (${device}) power $desired."
-                return 0
-            elif [[ -n "$port" ]] && networksetup -setairportpower "$port" "$desired" 2>/dev/null; then
-                log "Set Wi-Fi (${port}) power $desired."
-                return 0
-            fi
-            log "Failed to change Wi-Fi state to $desired."
-            return 1
-            ;;
-        *)
-            log "Invalid Wi-Fi power state requested: $desired"
-            return 1
-            ;;
-    esac
-}
-
-main() {
-    require_root
-
-    local wifi_device
-    wifi_device="$(get_wifi_device || true)"
-    if [[ -z "$wifi_device" ]]; then
-        log "No Wi-Fi hardware port found; exiting."
-        exit 0
+    if [[ "$desired" != "on" && "$desired" != "off" ]]; then
+        fail "Invalid Wi-Fi power request: $desired"
     fi
 
-    local wifi_port
-    wifi_port="$(get_port_name_for_device "$wifi_device")"
-    if [[ -z "$wifi_port" ]]; then
-        log "Wi-Fi hardware port name could not be resolved."
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_verbose "Dry-run: would set Wi-Fi power $desired."
+        return 0
+    fi
+
+    if "$NET_SETUP" -setairportpower "$wifi_port_name" "$desired" 2>/dev/null; then
+        log "Wi-Fi power set to $desired using ${wifi_port_name}."
+        return 0
+    fi
+
+    if [[ -n "$wifi_device" ]] && "$NET_SETUP" -setairportpower "$wifi_device" "$desired" 2>/dev/null; then
+        log "Wi-Fi power set to $desired using ${wifi_device}."
+        return 0
+    fi
+
+    fail "Failed to set Wi-Fi power to $desired."
+}
+
+# Main control flow
+main() {
+    parse_args "$@"
+    require_root
+    load_hardware_ports
+
+    if [[ -z "$wifi_device" && -z "$wifi_port_name" ]]; then
+        log "No Wi-Fi interface found. Exiting."
+        exit 2
     fi
 
     local wifi_state
-    wifi_state="$(wifi_power_state "$wifi_device" "$wifi_port")"
+    wifi_state="$(wifi_power_state)"
     if [[ "$wifi_state" == "Unknown" ]]; then
-        exit 1
+        fail "Unable to determine Wi-Fi state."
     fi
 
+    local ethernet_active="false"
     if has_active_physical_ethernet; then
-        if [[ "$wifi_state" == "On" ]]; then
-            toggle_wifi off "$wifi_device" "$wifi_port"
-        else
-            log "Wi-Fi already off; no action taken."
-        fi
-    else
-        if [[ "$wifi_state" == "Off" ]]; then
-            toggle_wifi on "$wifi_device" "$wifi_port"
-        else
-            log "Wi-Fi already on; no action taken."
-        fi
+        ethernet_active="true"
     fi
+
+    if [[ "$ethernet_active" == "true" && "$wifi_state" == "On" ]]; then
+        set_wifi_power off
+        exit 0
+    elif [[ "$ethernet_active" == "false" && "$wifi_state" == "Off" ]]; then
+        set_wifi_power on
+        exit 0
+    fi
+
+    log_verbose "No change required (Ethernet active: ${ethernet_active}, Wi-Fi: ${wifi_state})."
+    exit 2
 }
 
 main "$@"
