@@ -1,10 +1,34 @@
-# macOS metadata
+# macOS
 .DS_Store
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
 
-# Editor settings
+# Editors
 .idea/
 .vscode/
 
+# Xcode / Swift
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+*.xcworkspace
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+
+# Builds / SwiftPM
+Build/
+.build/
+Packages/
+Package.resolved
+
 # Logs
+*.log
 wifi-toggle.launchd.log
 wifi-toggle.log
+
+# Local prompts
+Prompts/

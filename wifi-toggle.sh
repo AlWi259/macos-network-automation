@@ -92,6 +92,9 @@ parse_args() {
                 usage
                 exit 0
                 ;;
+            \#*)
+                shift
+                ;;
             *)
                 fail "Unknown argument: $1"
                 ;;
@@ -143,14 +146,17 @@ port_name_for_device() {
     return 1
 }
 
-# Determine Wi-Fi power state (On/Off/Unknown)
+# Determine Wi-Fi power state (On/Off/Unknown) preferring device first
 wifi_power_state() {
     local output=""
-    if [[ -n "$wifi_port_name" ]]; then
-        output=$("$NET_SETUP" -getairportpower "$wifi_port_name" 2>/dev/null || true)
-    elif [[ -n "$wifi_device" ]]; then
+    if [[ -n "$wifi_device" ]]; then
         output=$("$NET_SETUP" -getairportpower "$wifi_device" 2>/dev/null || true)
     fi
+    if [[ -z "$output" && -n "$wifi_port_name" ]]; then
+        output=$("$NET_SETUP" -getairportpower "$wifi_port_name" 2>/dev/null || true)
+    fi
+
+    log_verbose "Wi-Fi power query (device=${wifi_device:-none} port=${wifi_port_name:-none}): ${output:-<empty>}"
 
     if [[ -z "$output" ]]; then
         log "Unable to read Wi-Fi power state."
@@ -158,11 +164,20 @@ wifi_power_state() {
         return 0
     fi
 
-    if printf '%s' "$output" | "$GREP" -q "On"; then
-        printf 'On'
-    else
-        printf 'Off'
-    fi
+    local lower
+    lower=$(printf '%s' "$output" | tr '[:upper:]' '[:lower:]')
+
+    case "$lower" in
+        *on*|*ein*)
+            printf 'On'
+            ;;
+        *off*|*aus*)
+            printf 'Off'
+            ;;
+        *)
+            printf 'Unknown'
+            ;;
+    esac
 }
 
 # Detect virtual or non-physical ports
@@ -198,7 +213,7 @@ has_active_physical_ethernet() {
     return 1
 }
 
-# Set Wi-Fi power to on/off respecting dry-run
+# Set Wi-Fi power to on/off respecting dry-run, prefer device
 set_wifi_power() {
     local desired="$1"
     if [[ "$desired" != "on" && "$desired" != "off" ]]; then
@@ -210,16 +225,19 @@ set_wifi_power() {
         return 0
     fi
 
-    if "$NET_SETUP" -setairportpower "$wifi_port_name" "$desired" 2>/dev/null; then
-        log "Wi-Fi power set to $desired using ${wifi_port_name}."
-        return 0
-    fi
+    local output=""
 
-    if [[ -n "$wifi_device" ]] && "$NET_SETUP" -setairportpower "$wifi_device" "$desired" 2>/dev/null; then
+    if [[ -n "$wifi_device" ]] && output=$("$NET_SETUP" -setairportpower "$wifi_device" "$desired" 2>/dev/null); then
         log "Wi-Fi power set to $desired using ${wifi_device}."
         return 0
     fi
 
+    if [[ -n "$wifi_port_name" ]] && output=$("$NET_SETUP" -setairportpower "$wifi_port_name" "$desired" 2>/dev/null); then
+        log "Wi-Fi power set to $desired using ${wifi_port_name}."
+        return 0
+    fi
+
+    log "Failed to set Wi-Fi power to $desired. Output: ${output:-none}"
     fail "Failed to set Wi-Fi power to $desired."
 }
 
