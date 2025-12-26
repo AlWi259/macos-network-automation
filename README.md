@@ -6,7 +6,7 @@ Automatic Wi‑Fi power control on macOS: disables Wi‑Fi when a wired Ethernet
 
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue)](https://www.apple.com/macos)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.0.0-black.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.1.0-black.svg)](CHANGELOG.md)
 
 ## Table of Contents
 - [Features](#features)
@@ -107,6 +107,7 @@ sudo rm -rf /Applications/NetworkToggle.app    # if installed
 - Permissions: `sudo chown root:wheel /usr/local/sbin/wifi-toggle.sh /Library/LaunchDaemons/com.user.wifitoggle.plist`.
 - Gatekeeper (menu app): if blocked, right-click > Open once, or codesign locally in Xcode.
 - Logs empty: ensure the daemon is loaded; run script manually with `--verbose` to confirm logging.
+- Wi‑Fi state seems wrong: reinstall `wifi-toggle.sh` to `/usr/local/sbin`, then run `sudo /usr/local/sbin/wifi-toggle.sh --verbose` and check `/tmp/wifi-toggle.log` for the “Wi-Fi power query” line (handles localized On/Off/EIN/AUS output).
 
 ## Development
 - Project structure:

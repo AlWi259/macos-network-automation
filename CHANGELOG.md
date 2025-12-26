@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.1.0] - 2025-12-26
+
+### Added
+- Interactive installer (`install.sh`), uninstaller (`uninstall.sh`), and status helper (`check-status.sh`)
+- SwiftUI menu bar app scaffold under `MenuBarApp/` with daemon controls and log viewer
+- Logging enhancements and verbose/debug flags for troubleshooting
+
+### Changed
+- README and docs expanded with install, usage, troubleshooting, and structure details
+- Release artifacts (.gitignore, LICENSE, and project files) aligned for open-source distribution
+
+### Fixed
+- Wi-Fi power detection tolerates localized `networksetup` output (On/Off/Ein/Aus) and USB Ethernet adapters
+- Cleaned logging noise and argument parsing to avoid false errors
+
+### Security
+- Maintained root-only operations with absolute paths and ShellCheck-friendly hardening
+
 ## [1.0.0] - 2025-12-26
 
 ### Added
