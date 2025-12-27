@@ -1,31 +1,34 @@
 # 🛰️ Network Toggle
 
-Automatic Wi‑Fi power control on macOS: disables Wi‑Fi when a wired Ethernet link is active and re‑enables Wi‑Fi when Ethernet disconnects. Includes a LaunchDaemon for background automation and an optional SwiftUI menu bar companion.
+Automatic Wi‑Fi power control for macOS. Disables Wi‑Fi when a wired Ethernet link is active and re‑enables Wi‑Fi when Ethernet disconnects.
+
+**Badges:** macOS 13+ • MIT License • v1.1.1
+
+**What’s new:** v1.1.1 refreshes documentation, metadata, and configuration notes. See [CHANGELOG.md](CHANGELOG.md).
 
 ![Menu bar icon placeholder](docs/assets/menubar-placeholder.png "Menu bar icon preview")
-
-[![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue)](https://www.apple.com/macos)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.1.0-black.svg)](CHANGELOG.md)
 
 ## Table of Contents
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Configuration & Behavior](#configuration--behavior)
+- [Security Considerations](#security-considerations)
 - [Menu Bar App](#menu-bar-app)
 - [Uninstallation](#uninstallation)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [Contributing](#contributing)
+- [Repository Metadata](#repository-metadata)
 - [License](#license)
 
 ## Features
-- ⚡ Automatic Wi‑Fi toggle when wired Ethernet link is active
+- ⚡ Automatic Wi‑Fi toggle on wired Ethernet link
 - 🧭 Dynamic hardware discovery (no hardcoded interface names)
 - 🧩 USB Ethernet/docking station support
 - 🔒 LaunchDaemon with root permissions for reliable hardware control
-- 📜 Logging to `/tmp/wifi-toggle.log` and LaunchDaemon log
+- 📜 Logging to `/tmp/wifi-toggle.log` and `/tmp/wifi-toggle.launchd.log`
 - 🧪 Dry-run (`--dry-run`) and verbose (`--verbose`) modes for safe testing
 - 🖥️ Optional SwiftUI menu bar app for status, logs, and manual actions
 
@@ -37,14 +40,14 @@ Automatic Wi‑Fi power control on macOS: disables Wi‑Fi when a wired Ethernet
 ## Installation
 ### Quick install (interactive)
 ```bash
-cd ~/network-scripts
-sudo ./install.sh       # installs script + LaunchDaemon, optional menu bar app
-./check-status.sh       # verify daemon and logs
+cd ~/macos-network-automation
+sudo ./install.sh
+./check-status.sh
 ```
 
 ### Manual install
 ```bash
-cd ~/network-scripts
+cd ~/macos-network-automation
 sudo install -d -m 755 /usr/local/sbin
 sudo install -m 755 wifi-toggle.sh /usr/local/sbin/wifi-toggle.sh
 sudo install -m 644 com.user.wifitoggle.plist /Library/LaunchDaemons/com.user.wifitoggle.plist
@@ -62,19 +65,33 @@ sudo tail -n 5 /tmp/wifi-toggle.log
 ```
 
 ## Usage
-- Automation: LaunchDaemon monitors `/Library/Preferences/SystemConfiguration/` and calls `wifi-toggle.sh`.
-- Manual run: `sudo /usr/local/sbin/wifi-toggle.sh [--dry-run] [--verbose|-v] [--help|-h]`
-  - `--dry-run` prints intended actions without changing Wi‑Fi power.
-  - `--verbose` echoes decisions to stdout in addition to the log file.
-- Logs: `/tmp/wifi-toggle.log` (script) and `/tmp/wifi-toggle.launchd.log` (daemon stdout/err).
-- Behavior: Wi‑Fi turns off when any non-virtual Ethernet interface reports `status: active`; re-enables when not.
+### Manual run
+```bash
+sudo /usr/local/sbin/wifi-toggle.sh --dry-run --verbose
+```
+
+### CLI flags
+- `--dry-run` prints intended actions without changing Wi‑Fi power.
+- `--verbose` echoes decisions to stdout in addition to the log file.
+- `--help` shows usage.
+
+## Configuration & Behavior
+- **Interface detection:** all non‑Wi‑Fi hardware ports from `networksetup -listallhardwareports`, minus virtual adapters; link check via `ifconfig <dev>` with `status: active`.
+- **Logs:** `/tmp/wifi-toggle.log` (script) and `/tmp/wifi-toggle.launchd.log` (daemon stdout/err). `/tmp` is intentionally ephemeral and resets on reboot.
+- **Testing:** use `--dry-run` and `--verbose` for safe verification without changing Wi‑Fi power.
+- **LaunchDaemon label:** to customize `com.user.wifitoggle`, rename the plist file, update the `Label` key, and reload with `launchctl bootout/bootstrap`.
+
+## Security Considerations
+- Requires root/LaunchDaemon because macOS restricts `networksetup -setairportpower` to administrators.
+- The script only toggles Wi‑Fi power and reads local interface state; it does not send data externally.
+- All commands use absolute paths and built‑in macOS binaries only.
 
 ## Menu Bar App
 - Location: `MenuBarApp/NetworkToggle.xcodeproj` (macOS 13+ SwiftUI).
 - Icons:
   - 🔌 (`cable.connector`) — Ethernet active, Wi‑Fi off
   - 📡 (`wifi`) — Wi‑Fi active, no Ethernet
-  - ⚠️ (`exclamationmark.triangle`) — Daemon not running/unknown
+  - ⚠️ (`exclamationmark.triangle`) — daemon not running/unknown
 - Menu items:
   - Current status display
   - Toggle Wi‑Fi (runs `wifi-toggle.sh` with admin prompt)
@@ -84,12 +101,12 @@ sudo tail -n 5 /tmp/wifi-toggle.log
   - Launch at Login toggle (uses `SMAppService`)
   - Open script location
   - Quit
-- Build: open in Xcode, set a Development signing identity, build & run. Optional install to `/Applications` via `install.sh` prompt.
+- Build: open in Xcode, set a Development signing identity, build & run. Optional install to `/Applications` via `install.sh`.
 
 ## Uninstallation
 ### Interactive
 ```bash
-cd ~/network-scripts
+cd ~/macos-network-automation
 sudo ./uninstall.sh
 ```
 
@@ -98,7 +115,7 @@ sudo ./uninstall.sh
 sudo launchctl bootout system /Library/LaunchDaemons/com.user.wifitoggle.plist
 sudo rm /Library/LaunchDaemons/com.user.wifitoggle.plist
 sudo rm /usr/local/sbin/wifi-toggle.sh
-sudo rm -rf /Applications/NetworkToggle.app    # if installed
+sudo rm -rf /Applications/NetworkToggle.app
 ```
 
 ## Troubleshooting
@@ -107,12 +124,12 @@ sudo rm -rf /Applications/NetworkToggle.app    # if installed
 - Permissions: `sudo chown root:wheel /usr/local/sbin/wifi-toggle.sh /Library/LaunchDaemons/com.user.wifitoggle.plist`.
 - Gatekeeper (menu app): if blocked, right-click > Open once, or codesign locally in Xcode.
 - Logs empty: ensure the daemon is loaded; run script manually with `--verbose` to confirm logging.
-- Wi‑Fi state seems wrong: reinstall `wifi-toggle.sh` to `/usr/local/sbin`, then run `sudo /usr/local/sbin/wifi-toggle.sh --verbose` and check `/tmp/wifi-toggle.log` for the “Wi-Fi power query” line (handles localized On/Off/EIN/AUS output).
+- Localized Wi‑Fi states (EIN/AUS) are handled when parsing `networksetup -getairportpower`.
 
 ## Development
-- Project structure:
-```
-network-scripts/
+### Project structure
+```text
+macos-network-automation/
 ├── README.md
 ├── CHANGELOG.md
 ├── LICENSE
@@ -124,20 +141,29 @@ network-scripts/
 ├── check-status.sh
 └── MenuBarApp/
     ├── NetworkToggle.xcodeproj
-    └── NetworkToggle/
-        ├── NetworkToggleApp.swift
-        ├── MenuBarController.swift
-        ├── NetworkMonitor.swift
-        └── ScriptRunner.swift
+    ├── NetworkToggle/
+    │   ├── NetworkToggleApp.swift
+    │   ├── MenuBarController.swift
+    │   ├── NetworkMonitor.swift
+    │   └── ScriptRunner.swift
+    └── README_APP.md
 ```
-- Build menu app: open `MenuBarApp/NetworkToggle.xcodeproj` in Xcode 15+, set signing, build/run.
-- Tests: use `--dry-run` and `check-status.sh` to validate behavior; manual Ethernet connect/disconnect to observe toggling.
-- Coding standards: Shell scripts use `set -euo pipefail`, absolute paths, and no external dependencies; Swift uses async/await and `Process` without shell injection.
+
+### Developer notes
+- macOS 13+ and Xcode 15+ required to build the menu bar app.
+- Build locally: open `MenuBarApp/NetworkToggle.xcodeproj`, set signing, build & run.
+- End‑to‑end test: connect/disconnect Ethernet, then check `/tmp/wifi-toggle.log` and `/tmp/wifi-toggle.launchd.log`.
+- Run `--dry-run` and `check-status.sh` after changes to validate behavior.
 
 ## Contributing
-- Please open issues or pull requests with a clear description and steps to reproduce.
-- Follow shell style (ShellCheck-friendly) and Swift naming conventions.
-- Keep documentation in English and update the changelog for user-facing changes.
+- Create a feature branch from `main` (e.g. `feature/your-change`).
+- Run `sudo /usr/local/sbin/wifi-toggle.sh --dry-run --verbose` to validate behavior.
+- Update `README.md` and `CHANGELOG.md` for any user‑visible changes.
+- Open a PR with a clear summary and test notes.
+
+## Repository Metadata
+- **Suggested GitHub description:** “Automatic Wi‑Fi toggle on macOS when Ethernet is active, with LaunchDaemon automation and optional menu bar app.”
+- **Suggested topics:** `macos`, `wifi`, `ethernet`, `launchd`, `automation`, `swiftui`, `menu-bar-app`
 
 ## License
 MIT License. See [LICENSE](LICENSE) for details.

@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.1] - 2025-12-26
+
+### Changed
+- README refreshed with clearer formatting, repo path alignment, and configuration notes
+- Added repository metadata suggestions and a short security section
+
+### Fixed
+- Documentation now uses consistent fenced code blocks and copy‑paste friendly commands
+
 ## [1.1.0] - 2025-12-26
 
 ### Added
