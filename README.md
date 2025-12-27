@@ -6,22 +6,31 @@ Automatic Wi‑Fi power control for macOS. Disables Wi‑Fi when a wired Etherne
 
 **What’s new:** v1.1.1 refreshes documentation, metadata, and configuration notes. See [CHANGELOG.md](CHANGELOG.md).
 
-![Menu bar icon placeholder](docs/assets/menubar-placeholder.png "Menu bar icon preview")
-
 ## Table of Contents
-- [Features](#features)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Configuration & Behavior](#configuration--behavior)
-- [Security Considerations](#security-considerations)
-- [Menu Bar App](#menu-bar-app)
-- [Uninstallation](#uninstallation)
-- [Troubleshooting](#troubleshooting)
-- [Development](#development)
-- [Contributing](#contributing)
-- [Repository Metadata](#repository-metadata)
-- [License](#license)
+- [🛰️ Network Toggle](#️-network-toggle)
+  - [Table of Contents](#table-of-contents)
+  - [Features](#features)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+    - [Quick install (interactive)](#quick-install-interactive)
+    - [Manual install](#manual-install)
+    - [Verify installation](#verify-installation)
+  - [Usage](#usage)
+    - [Manual run](#manual-run)
+    - [CLI flags](#cli-flags)
+  - [Configuration \& Behavior](#configuration--behavior)
+  - [Security Considerations](#security-considerations)
+  - [Menu Bar App](#menu-bar-app)
+  - [Uninstallation](#uninstallation)
+    - [Interactive](#interactive)
+    - [Manual](#manual)
+  - [Troubleshooting](#troubleshooting)
+  - [Development](#development)
+    - [Project structure](#project-structure)
+    - [Developer notes](#developer-notes)
+  - [Contributing](#contributing)
+  - [Repository Metadata](#repository-metadata)
+  - [License](#license)
 
 ## Features
 - ⚡ Automatic Wi‑Fi toggle on wired Ethernet link
