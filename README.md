@@ -2,9 +2,9 @@
 
 Automatic Wi‑Fi power control for macOS. Disables Wi‑Fi when a wired Ethernet link is active and re‑enables Wi‑Fi when Ethernet disconnects.
 
-**Badges:** macOS 13+ • MIT License • v1.1.1
+**Badges:** macOS 13+ • MIT License • v1.1.2
 
-**What’s new:** v1.1.1 refreshes documentation, metadata, and configuration notes. See [CHANGELOG.md](CHANGELOG.md).
+**What’s new:** v1.1.2 adds clearer in‑code comments and developer notes. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Table of Contents
 - [🛰️ Network Toggle](#️-network-toggle)

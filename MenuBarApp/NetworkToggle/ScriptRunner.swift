@@ -1,17 +1,20 @@
 import Foundation
 import AppKit
 
+// Simple Wi-Fi power state model
 enum WifiPower {
     case on
     case off
     case unknown
 }
 
+// Runs system commands and script actions safely
 final class ScriptRunner {
     private let logPath = "/tmp/wifi-toggle.log"
     private let scriptPath = "/usr/local/sbin/wifi-toggle.sh"
     private let daemonPlist = "/Library/LaunchDaemons/com.user.wifitoggle.plist"
 
+    // Run the toggle script with admin privileges
     func runScript() async {
         guard FileManager.default.isExecutableFile(atPath: scriptPath) else {
             log(message: "wifi-toggle.sh missing or not executable.")
@@ -23,6 +26,7 @@ final class ScriptRunner {
         _ = await runAppleScript(command)
     }
 
+    // Restart the LaunchDaemon using launchctl
     func restartDaemon() async {
         let commands = [
             ["/bin/launchctl", "bootout", "system", daemonPlist],
@@ -34,11 +38,13 @@ final class ScriptRunner {
         }
     }
 
+    // Check if the LaunchDaemon is loaded
     func isDaemonRunning() -> Bool {
         let result = runSyncProcess(["/bin/launchctl", "print", "system/com.user.wifitoggle"])
         return result.exitCode == 0
     }
 
+    // Read current Wi-Fi power state
     func readWifiState() async -> WifiPower {
         guard let device = await wifiPortOrDevice() else { return .unknown }
         let result = runSyncProcess(["/usr/sbin/networksetup", "-getairportpower", device])
@@ -48,6 +54,7 @@ final class ScriptRunner {
         return .unknown
     }
 
+    // Check if any Ethernet interface is active
     func isEthernetActive() async -> Bool {
         let devices = await ethernetDevices()
         for dev in devices {
@@ -59,23 +66,27 @@ final class ScriptRunner {
         return false
     }
 
+    // Read recent log lines from the script log
     func tailLog(lines: Int = 10) -> [String] {
         guard let data = FileManager.default.contents(atPath: logPath),
               let text = String(data: data, encoding: .utf8) else { return [] }
         return text.split(separator: "\n").suffix(lines).map(String.init)
     }
 
+    // Open the repo folder in Finder
     func openScriptLocation() {
         let url = URL(fileURLWithPath: "/Users/\(NSUserName())/network-scripts")
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
+    // Write a message to Console.app
     func log(message: String) {
         NSLog("NetworkToggle: %@", message)
     }
 
     // MARK: - Helpers
 
+    // Resolve the Wi-Fi device from hardware ports
     private func wifiPortOrDevice() async -> String? {
         let list = runSyncProcess(["/usr/sbin/networksetup", "-listallhardwareports"])
         guard list.exitCode == 0 else { return nil }
@@ -94,6 +105,7 @@ final class ScriptRunner {
         return nil
     }
 
+    // List non-virtual Ethernet devices
     private func ethernetDevices() async -> [String] {
         let list = runSyncProcess(["/usr/sbin/networksetup", "-listallhardwareports"])
         guard list.exitCode == 0 else { return [] }
@@ -113,6 +125,7 @@ final class ScriptRunner {
         return devices
     }
 
+    // Filter out virtual adapters by name
     private func isVirtualPort(name: String) -> Bool {
         switch name {
         case let n where n.contains("Bridge"),
@@ -133,6 +146,7 @@ final class ScriptRunner {
         }
     }
 
+    // Run a command asynchronously
     private func runProcess(_ command: [String]) async -> (output: String, exitCode: Int32) {
         await withCheckedContinuation { continuation in
             Task.detached { [weak self] in
@@ -142,6 +156,7 @@ final class ScriptRunner {
         }
     }
 
+    // Run a command synchronously and capture output
     private func runSyncProcess(_ command: [String]) -> (output: String, exitCode: Int32) {
         var outputData = Data()
         let process = Process()
@@ -164,6 +179,7 @@ final class ScriptRunner {
         return (output, process.terminationStatus)
     }
 
+    // Run AppleScript with osascript
     private func runAppleScript(_ source: String) async -> Bool {
         await withCheckedContinuation { continuation in
             Task.detached {

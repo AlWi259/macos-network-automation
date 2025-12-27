@@ -16,6 +16,7 @@ RED="\033[0;31m"
 YELLOW="\033[1;33m"
 NC="\033[0m"
 
+# Print usage help
 usage() {
     cat <<'EOF'
 Usage: ./check-status.sh
@@ -24,15 +25,18 @@ Shows daemon status, file presence/permissions, and recent log entries.
 EOF
 }
 
+# Print a single status line
 status_line() {
     local label="$1" value="$2" color="$3"
     printf '%b%-25s%b %s\n' "$color" "$label" "$NC" "$value"
 }
 
+# Check if the LaunchDaemon is loaded
 daemon_loaded() {
     launchctl print system/com.user.wifitoggle >/dev/null 2>&1
 }
 
+# Return file permission string or "missing"
 perm_string() {
     if [[ -e "$1" ]]; then
         stat -f "%Sp %Su:%Sg" "$1"
@@ -41,6 +45,7 @@ perm_string() {
     fi
 }
 
+# Main entry point
 main() {
     if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
         usage

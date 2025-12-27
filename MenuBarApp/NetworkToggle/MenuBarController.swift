@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import Combine
 
+// Controls the menu bar item, icon state, and menu actions
 final class MenuBarController {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let monitor = NetworkMonitor()
@@ -9,6 +10,7 @@ final class MenuBarController {
     private var cancellables = Set<AnyCancellable>()
     private var showOnboarding = UserDefaults.standard.bool(forKey: "NetworkToggleDidOnboard") == false
 
+    // Build the menu and start monitoring state
     init() {
         configureMenu()
         bindMonitor()
@@ -19,6 +21,7 @@ final class MenuBarController {
         }
     }
 
+    // Create the initial menu UI and icon
     private func configureMenu() {
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: "wifi", accessibilityDescription: "Network Toggle")
@@ -26,6 +29,7 @@ final class MenuBarController {
         statusItem.menu = buildMenu(state: monitor.state, logs: [])
     }
 
+    // Subscribe to network state changes
     private func bindMonitor() {
         monitor.$state
             .receive(on: RunLoop.main)
@@ -35,11 +39,13 @@ final class MenuBarController {
             .store(in: &cancellables)
     }
 
+    // Refresh icon and menu when state changes
     private func refresh(state: NetworkState) {
         updateIcon(state: state)
         reloadMenu(state: state)
     }
 
+    // Update the status bar icon based on state
     private func updateIcon(state: NetworkState) {
         guard let button = statusItem.button else { return }
         let symbol: String
@@ -56,11 +62,13 @@ final class MenuBarController {
         button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Network Toggle")
     }
 
+    // Rebuild menu items with fresh logs and status
     private func reloadMenu(state: NetworkState) {
         let logs = runner.tailLog()
         statusItem.menu = buildMenu(state: state, logs: logs)
     }
 
+    // Build the menu structure for the status item
     private func buildMenu(state: NetworkState, logs: [String]) -> NSMenu {
         let menu = NSMenu()
 
@@ -123,31 +131,38 @@ final class MenuBarController {
         return menu
     }
 
+    // Run the toggle script with admin prompt
     @objc private func handleToggle() {
         Task { await runner.runScript() }
     }
 
+    // Force a state refresh
     @objc private func handleRefresh() {
         monitor.refreshNow()
     }
 
+    // Restart the LaunchDaemon
     @objc private func handleRestartDaemon() {
         Task { await runner.restartDaemon() }
     }
 
+    // Toggle launch at login and update the menu
     @objc private func handleToggleLogin() {
         monitor.toggleLaunchAtLogin()
         reloadMenu(state: monitor.state)
     }
 
+    // Open the repo folder in Finder
     @objc private func handleOpenScript() {
         runner.openScriptLocation()
     }
 
+    // Quit the menu bar app
     @objc private func handleQuit() {
         NSApplication.shared.terminate(nil)
     }
 
+    // Write a one-time onboarding log message
     private func logOnboarding() {
         runner.log(message: "Network Toggle menu bar app installed. It reflects wifi-toggle.sh state.")
     }

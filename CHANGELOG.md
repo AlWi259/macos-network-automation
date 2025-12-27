@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.2] - 2025-12-26
+
+### Changed
+- Added clear English comments across shell scripts and Swift UI code
+- Improved developer readability without changing runtime behavior
+
 ## [1.1.1] - 2025-12-26
 
 ### Changed

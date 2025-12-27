@@ -8,6 +8,7 @@ IFS=$'\n\t'
 PATH="/usr/sbin:/usr/bin:/bin:/usr/local/bin:/sbin"
 export PATH
 
+# Installed file locations
 SCRIPT_DST="/usr/local/sbin/wifi-toggle.sh"
 PLIST_DST="/Library/LaunchDaemons/com.user.wifitoggle.plist"
 MENU_APP_DST="/Applications/NetworkToggle.app"
@@ -18,6 +19,7 @@ CHECK="${GREEN}✔${NC}"; WARN="${YELLOW}!${NC}"; FAIL="${RED}✖${NC}"
 
 VERBOSE=false
 
+# Print usage help
 usage() {
     cat <<'EOF'
 Usage: sudo ./uninstall.sh [--verbose|-v] [--help|-h]
@@ -25,6 +27,7 @@ Safely unloads the LaunchDaemon and removes installed files.
 EOF
 }
 
+# Write a log line to the uninstall log
 log_message() {
     printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S%z')" "$*" >> "$UNINSTALL_LOG"
     if [[ "$VERBOSE" == "true" ]]; then
@@ -32,11 +35,13 @@ log_message() {
     fi
 }
 
+# Print colored status lines
 info() { printf '%s %s\n' "$YELLOW" "$1$NC"; }
 success() { printf '%s %s\n' "$CHECK" "$1"; }
 warning() { printf '%s %s\n' "$WARN" "$1"; }
 error() { printf '%s %s\n' "$FAIL" "$1" >&2; }
 
+# Ensure script runs as root
 require_root() {
     if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
         error "Run as root (sudo)."
@@ -44,6 +49,7 @@ require_root() {
     fi
 }
 
+# Ask a yes/no question
 prompt_yes_no() {
     local prompt="$1" default="${2:-Y}" reply suffix="[Y/n]"
     [[ "$default" == "N" ]] && suffix="[y/N]"
@@ -53,19 +59,23 @@ prompt_yes_no() {
     [[ "$reply" =~ ^[Yy]$ ]]
 }
 
+# Check if the LaunchDaemon is loaded
 daemon_loaded() { launchctl print system/com.user.wifitoggle >/dev/null 2>&1; }
 
+# Unload the LaunchDaemon
 unload_daemon() {
     launchctl bootout system "$PLIST_DST" >/dev/null 2>&1 || true
     log_message "Daemon unloaded."
 }
 
+# Remove installed files
 remove_files() {
     rm -f "$PLIST_DST"
     rm -f "$SCRIPT_DST"
     log_message "Removed plist and script."
 }
 
+# Main entry point
 main() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
